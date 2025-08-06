@@ -18,7 +18,7 @@ interface Config {
 export class ConfigHelper extends EventEmitter {
   private configPath: string;
   private defaultConfig: Config = {
-    apiKey: "",
+    apiKey: "AIzaSyBCnS16N71ppTu692mfk5knYWiujvNcsAw",
     apiProvider: "gemini", // Default to Gemini
     extractionModel: "gemini-2.0-flash", // Default to Flash for faster responses
     solutionModel: "gemini-2.0-flash",

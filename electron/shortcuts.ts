@@ -1,12 +1,19 @@
 import { globalShortcut, app } from "electron"
 import { IShortcutsHelperDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
+import { MCQHelper } from "./MCQHelper"
 
 export class ShortcutsHelper {
   private deps: IShortcutsHelperDeps
+  private mcqHelper: MCQHelper
 
   constructor(deps: IShortcutsHelperDeps) {
     this.deps = deps
+    // Initialize MCQ helper with screenshot helper
+    const screenshotHelper = deps.getScreenshotHelper?.()
+    if (screenshotHelper) {
+      this.mcqHelper = new MCQHelper(screenshotHelper)
+    }
   }
 
   private adjustOpacity(delta: number): void {
@@ -156,6 +163,20 @@ export class ShortcutsHelper {
       if (mainWindow) {
         // Send an event to the renderer to delete the last screenshot
         mainWindow.webContents.send("delete-last-screenshot")
+      }
+    })
+
+    // MCQ capture and answer shortcut
+    globalShortcut.register("CommandOrControl+M", async () => {
+      console.log("Command/Ctrl + M pressed. Capturing MCQ and analyzing...")
+      try {
+        if (this.mcqHelper) {
+          await this.mcqHelper.captureMCQAndShowAnswer()
+        } else {
+          console.error("MCQ Helper not initialized")
+        }
+      } catch (error) {
+        console.error("Error in MCQ capture:", error)
       }
     })
     

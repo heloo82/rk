@@ -85,6 +85,7 @@ export interface IShortcutsHelperDeps {
   moveWindowRight: () => void
   moveWindowUp: () => void
   moveWindowDown: () => void
+  getScreenshotHelper?: () => ScreenshotHelper | null
 }
 
 export interface IIpcHandlerDeps {
@@ -150,7 +151,8 @@ function initializeHelpers() {
         )
       ),
     moveWindowUp: () => moveWindowVertical((y) => y - state.step),
-    moveWindowDown: () => moveWindowVertical((y) => y + state.step)
+    moveWindowDown: () => moveWindowVertical((y) => y + state.step),
+    getScreenshotHelper: () => state.screenshotHelper
   } as IShortcutsHelperDeps)
 }
 
