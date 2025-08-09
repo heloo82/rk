@@ -242,7 +242,7 @@ Do NOT include more than one MCQ in your response.
       this.overlayWindow.showInactive();
       setTimeout(() => {
         this.hideOverlay();
-      }, 3000);
+      }, 300);
 
     } catch (error) {
       console.error("Error showing answer overlay:", error);
