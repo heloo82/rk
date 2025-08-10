@@ -55,7 +55,7 @@ export class MCQHelper {
       const screenshotPath = await this.screenshotHelper.takeScreenshot(() => {}, () => {});
       console.log("Screenshot taken:", screenshotPath);
 
-      let { answer, fullText } = await this.analyzeMCQ(screenshotPath);
+      let { preview, fullText } = await this.analyzeMCQ(screenshotPath);
 
       console.log("\n=========== GEMINI RAW OUTPUT ===========\n");
       console.log(fullText || "No response text");
@@ -69,11 +69,7 @@ export class MCQHelper {
         console.log(`Full response saved to: ${logFile}`);
       }
 
-      if (!answer) {
-        answer = "N";
-      }
-
-      await this.showAnswerOverlay(answer);
+      await this.showAnswerOverlay(preview || "N");
 
       if (wasMainWindowVisible && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.show();
@@ -86,17 +82,16 @@ export class MCQHelper {
 
   private async analyzeMCQ(
     screenshotPath: string
-  ): Promise<{ answer: string | null; fullText: string | null }> {
+  ): Promise<{ preview: string | null; fullText: string | null }> {
     try {
       const config = configHelper.loadConfig();
       if (!config.apiKey) {
         console.error("No API key configured");
-        return { answer: null, fullText: null };
+        return { preview: null, fullText: null };
       }
 
       const screenshotData = fs.readFileSync(screenshotPath).toString("base64");
 
-      // Updated prompt so options are always labeled
       const prompt = `
 You are an expert at analyzing multiple choice questions (MCQs).
 
@@ -150,28 +145,44 @@ Do NOT include more than one MCQ in your response.
       const responseData = response.data as GeminiResponse;
       if (!responseData.candidates || responseData.candidates.length === 0) {
         console.error("Empty response from Gemini API");
-        return { answer: null, fullText: null };
+        return { preview: null, fullText: null };
       }
 
       const responseText =
         responseData.candidates[0].content.parts[0].text.trim();
 
       if (responseText === "NO_MCQ") {
-        return { answer: null, fullText: responseText };
+        return { preview: null, fullText: responseText };
       }
 
       const answerMatch = responseText.match(/ANSWER:\s*([A-Da-d1-4])/);
+      const answerLetter = answerMatch ? answerMatch[1].toLowerCase() : null;
+
+      let preview: string | null = null;
+      if (answerLetter) {
+        // Match the correct option text (case-insensitive, handles A) or A. etc.)
+        const optionRegex = new RegExp(
+          `^${answerLetter}\\)?[.)]?\\s*(.+)$`,
+          "im"
+        );
+        const optionMatch = responseText.match(optionRegex);
+        if (optionMatch && optionMatch[1]) {
+          const firstTwo = optionMatch[1].trim().substring(0, 2).toLowerCase();
+          preview = `${answerLetter}->${firstTwo}`;
+        }
+      }
+
       return {
-        answer: answerMatch ? answerMatch[1].toLowerCase() : null,
+        preview,
         fullText: responseText,
       };
     } catch (error) {
       console.error("Error analyzing MCQ:", error);
-      return { answer: null, fullText: null };
+      return { preview: null, fullText: null };
     }
   }
 
-  private async showAnswerOverlay(fullOutput: string): Promise<void> {
+  private async showAnswerOverlay(shortOutput: string): Promise<void> {
     try {
       this.hideOverlay();
 
@@ -179,11 +190,13 @@ Do NOT include more than one MCQ in your response.
       const { height: screenHeight } = primaryDisplay.workAreaSize;
 
       const overlayX = 20;
-      const overlayY = screenHeight - 70; // much shorter
+      const overlayY = screenHeight - 70;
+
+      const overlayWidth = Math.max(60, shortOutput.length * 14);
 
       this.overlayWindow = new BrowserWindow({
-        width: 100,
-        height: 50, // small height for short overlay
+        width: overlayWidth,
+        height: 50,
         x: overlayX,
         y: overlayY,
         frame: false,
@@ -214,7 +227,8 @@ Do NOT include more than one MCQ in your response.
         visibleOnFullScreen: true,
       });
       this.overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
-   const overlayHTML = `
+
+      const overlayHTML = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -242,7 +256,7 @@ Do NOT include more than one MCQ in your response.
   </style>
 </head>
 <body>
-  <div class="answer">${fullOutput.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
+  <div class="answer">${shortOutput.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
 </body>
 </html>
 `;
@@ -255,7 +269,7 @@ Do NOT include more than one MCQ in your response.
 
       setTimeout(() => {
         this.hideOverlay();
-      }, 500); // show for 3 seconds
+      }, 500); // short display
     } catch (error) {
       console.error("Error showing answer overlay:", error);
     }
