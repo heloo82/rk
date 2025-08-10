@@ -1,8 +1,10 @@
 // MCQHelper.ts - Handles MCQ detection and answer overlay
-import { BrowserWindow, screen } from "electron"
-import * as axios from "axios"
-import { ScreenshotHelper } from "./ScreenshotHelper"
-import { configHelper } from "./ConfigHelper"
+import { BrowserWindow, screen } from "electron";
+import * as axios from "axios";
+import { ScreenshotHelper } from "./ScreenshotHelper";
+import { configHelper } from "./ConfigHelper";
+import * as fs from "fs";
+import * as path from "path";
 
 interface GeminiMessage {
   role: string;
@@ -11,7 +13,7 @@ interface GeminiMessage {
     inlineData?: {
       mimeType: string;
       data: string;
-    }
+    };
   }>;
 }
 
@@ -34,13 +36,10 @@ export class MCQHelper {
     this.screenshotHelper = screenshotHelper;
   }
 
-  /**
-   * Capture screen and analyze MCQ, then show answer overlay
-   */
   public async captureMCQAndShowAnswer(): Promise<void> {
     try {
       console.log("Starting MCQ capture and analysis...");
-      
+
       const mainWindow = this.getMainWindow();
       let wasMainWindowVisible = false;
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -51,15 +50,25 @@ export class MCQHelper {
       }
 
       this.hideOverlay();
-
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const screenshotPath = await this.screenshotHelper.takeScreenshot(() => {}, () => {});
       console.log("Screenshot taken:", screenshotPath);
 
-      let answer = await this.analyzeMCQ(screenshotPath);
+      let { answer, fullText } = await this.analyzeMCQ(screenshotPath);
 
-      // ✅ If no answer or error, show "N"
+      console.log("\n=========== GEMINI RAW OUTPUT ===========\n");
+      console.log(fullText || "No response text");
+      console.log("\n=========================================\n");
+
+      if (fullText) {
+        const logDir = path.join(__dirname, "gemini_logs");
+        if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
+        const logFile = path.join(logDir, `gemini_${Date.now()}.txt`);
+        fs.writeFileSync(logFile, fullText, "utf-8");
+        console.log(`Full response saved to: ${logFile}`);
+      }
+
       if (!answer) {
         answer = "N";
       }
@@ -69,42 +78,43 @@ export class MCQHelper {
       if (wasMainWindowVisible && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.show();
       }
-
     } catch (error) {
       console.error("Error in MCQ capture and analysis:", error);
-      // ✅ Show "N" in case of any error
       await this.showAnswerOverlay("N");
     }
   }
 
-  /**
-   * Analyze screenshot for MCQ and return the answer
-   */
-  private async analyzeMCQ(screenshotPath: string): Promise<string | null> {
+  private async analyzeMCQ(
+    screenshotPath: string
+  ): Promise<{ answer: string | null; fullText: string | null }> {
     try {
       const config = configHelper.loadConfig();
       if (!config.apiKey) {
         console.error("No API key configured");
-        return null;
+        return { answer: null, fullText: null };
       }
 
-      const fs = require('fs');
-      const screenshotData = fs.readFileSync(screenshotPath).toString('base64');
+      const screenshotData = fs.readFileSync(screenshotPath).toString("base64");
 
+      // Updated prompt so options are always labeled
       const prompt = `
 You are an expert at analyzing multiple choice questions (MCQs).
 
 From the screenshot:
 1. Identify ONLY the very first complete MCQ that appears from top to bottom in the image.
-2. Extract the full MCQ question text and all available options exactly as seen.
-3. Determine the correct answer.
-4. Respond in the format:
-QUESTION: <question text>
-OPTIONS:
-a) ...
-b) ...
-c) ...
-d) ...
+2. Extract the full MCQ question text.
+3. If the options are not labeled with A, B, C, D or 1, 2, 3, 4, you MUST assign them sequentially (A, B, C, D) before giving the answer.
+4. Maintain exactly 4 options.
+5. Determine the correct answer and explain your reasoning.
+6. Respond in the format:
+
+<MCQ question>
+A) <option 1>
+B) <option 2>
+C) <option 3>
+D) <option 4>
+
+<Reasoning and explanation>
 ANSWER: <answer letter/number>
 
 If no MCQ is found, respond only with "NO_MCQ".
@@ -119,11 +129,11 @@ Do NOT include more than one MCQ in your response.
             {
               inlineData: {
                 mimeType: "image/png",
-                data: screenshotData
-              }
-            }
-          ]
-        }
+                data: screenshotData,
+              },
+            },
+          ],
+        },
       ];
 
       const response = await axios.default.post(
@@ -132,50 +142,48 @@ Do NOT include more than one MCQ in your response.
           contents: geminiMessages,
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 200
-          }
+            maxOutputTokens: 500,
+          },
         }
       );
 
       const responseData = response.data as GeminiResponse;
       if (!responseData.candidates || responseData.candidates.length === 0) {
         console.error("Empty response from Gemini API");
-        return null;
+        return { answer: null, fullText: null };
       }
 
-      const responseText = responseData.candidates[0].content.parts[0].text.trim();
-      console.log("Gemini full response:\n", responseText);
+      const responseText =
+        responseData.candidates[0].content.parts[0].text.trim();
 
       if (responseText === "NO_MCQ") {
-        return null;
+        return { answer: null, fullText: responseText };
       }
 
       const answerMatch = responseText.match(/ANSWER:\s*([A-Da-d1-4])/);
-      return answerMatch ? answerMatch[1].toLowerCase() : null;
-
+      return {
+        answer: answerMatch ? answerMatch[1].toLowerCase() : null,
+        fullText: responseText,
+      };
     } catch (error) {
       console.error("Error analyzing MCQ:", error);
-      return null;
+      return { answer: null, fullText: null };
     }
   }
 
-  /**
-   * Show answer overlay at bottom-left corner with white background and black text
-   */
-  private async showAnswerOverlay(answer: string): Promise<void> {
+  private async showAnswerOverlay(fullOutput: string): Promise<void> {
     try {
       this.hideOverlay();
 
       const primaryDisplay = screen.getPrimaryDisplay();
-      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+      const { height: screenHeight } = primaryDisplay.workAreaSize;
 
-      // Position overlay at bottom-left
       const overlayX = 20;
-      const overlayY = screenHeight - 70; // Bottom offset
+      const overlayY = screenHeight - 70; // much shorter
 
       this.overlayWindow = new BrowserWindow({
         width: 100,
-        height: 50,
+        height: 50, // small height for short overlay
         x: overlayX,
         y: overlayY,
         frame: false,
@@ -186,7 +194,7 @@ Do NOT include more than one MCQ in your response.
         resizable: false,
         movable: false,
         show: false,
-        hasShadow: false,
+        hasShadow: true,
         opacity: 1.0,
         backgroundColor: "#00FFFFFF",
         type: "panel",
@@ -197,15 +205,16 @@ Do NOT include more than one MCQ in your response.
           nodeIntegration: false,
           contextIsolation: true,
           scrollBounce: true,
-          backgroundThrottling: false
-        }
+          backgroundThrottling: false,
+        },
       });
 
       this.overlayWindow.setContentProtection(true);
-      this.overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      this.overlayWindow.setVisibleOnAllWorkspaces(true, {
+        visibleOnFullScreen: true,
+      });
       this.overlayWindow.setAlwaysOnTop(true, "screen-saver", 1);
-
-      const overlayHTML = `
+   const overlayHTML = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -233,17 +242,20 @@ Do NOT include more than one MCQ in your response.
   </style>
 </head>
 <body>
-  <div class="answer">${answer.toUpperCase()}</div>
+  <div class="answer">${fullOutput.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
 </body>
 </html>
 `;
-      await this.overlayWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(overlayHTML)}`);
+
+      await this.overlayWindow.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(overlayHTML)}`
+      );
 
       this.overlayWindow.showInactive();
+
       setTimeout(() => {
         this.hideOverlay();
-      }, 300);
-
+      }, 500); // show for 3 seconds
     } catch (error) {
       console.error("Error showing answer overlay:", error);
     }
@@ -258,10 +270,14 @@ Do NOT include more than one MCQ in your response.
 
   private getMainWindow(): BrowserWindow | null {
     const allWindows = BrowserWindow.getAllWindows();
-    return allWindows.find(window => 
-      !window.isDestroyed() && 
-      (window.webContents.getURL().includes('localhost') || window.webContents.getURL().includes('file:'))
-    ) || null;
+    return (
+      allWindows.find(
+        (window) =>
+          !window.isDestroyed() &&
+          (window.webContents.getURL().includes("localhost") ||
+            window.webContents.getURL().includes("file:"))
+      ) || null
+    );
   }
 
   public cleanup(): void {

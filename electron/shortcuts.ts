@@ -167,7 +167,7 @@ export class ShortcutsHelper {
     })
 
     // MCQ capture and answer shortcut
-    globalShortcut.register("A", async () => {
+    globalShortcut.register("Z", async () => {
       console.log("Command/Ctrl + M pressed. Capturing MCQ and analyzing...")
       try {
         if (this.mcqHelper) {
