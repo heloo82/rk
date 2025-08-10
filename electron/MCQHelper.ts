@@ -40,15 +40,8 @@ export class MCQHelper {
     try {
       console.log("Starting MCQ capture and analysis...");
 
-      const mainWindow = this.getMainWindow();
-      let wasMainWindowVisible = false;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        wasMainWindowVisible = mainWindow.isVisible();
-        if (wasMainWindowVisible) {
-          mainWindow.hide();
-        }
-      }
-
+      // Don't hide/show the main window to prevent focus loss
+      // This prevents the "Navigated Away" warning
       this.hideOverlay();
       await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -70,10 +63,6 @@ export class MCQHelper {
       }
 
       await this.showAnswerOverlay(preview || "N");
-
-      if (wasMainWindowVisible && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.show();
-      }
     } catch (error) {
       console.error("Error in MCQ capture and analysis:", error);
       await this.showAnswerOverlay("N");
