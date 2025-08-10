@@ -32,22 +32,48 @@ const CodeSection = ({
       </div>
     ) : (
       <div className="w-full">
-        <SyntaxHighlighter
-          showLineNumbers
-          language={currentLanguage == "golang" ? "go" : currentLanguage}
-          style={dracula}
-          customStyle={{
-            maxWidth: "100%",
-            margin: 0,
-            padding: "1rem",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-all",
-            backgroundColor: "rgba(22, 27, 34, 0.5)"
-          }}
-          wrapLongLines={true}
-        >
-          {code as string}
-        </SyntaxHighlighter>
+        {currentLanguage === "text" ? (
+          <div 
+            className="bg-[rgba(22,27,34,0.5)] p-4 rounded text-white/90 text-sm leading-relaxed whitespace-pre-wrap"
+            style={{ fontFamily: 'monospace' }}
+          >
+            {(() => {
+              const textContent = code as string;
+              
+              // First try to find "Correct Answer: [option]" pattern
+              let match = textContent.match(/Correct Answer:\s*([a-d1-4])/i);
+              if (match) {
+                return match[1].toUpperCase();
+              }
+              
+              // Then try to find "[option]->" pattern
+              match = textContent.match(/([a-d1-4])\s*->/i);
+              if (match) {
+                return match[1].toUpperCase();
+              }
+              
+              // If no patterns found, return empty string to avoid verbose output
+              return "";
+            })()}
+          </div>
+        ) : (
+          <SyntaxHighlighter
+            showLineNumbers
+            language={currentLanguage == "golang" ? "go" : currentLanguage}
+            style={dracula}
+            customStyle={{
+              maxWidth: "100%",
+              margin: 0,
+              padding: "1rem",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-all",
+              backgroundColor: "rgba(22, 27, 34, 0.5)"
+            }}
+            wrapLongLines={true}
+          >
+            {code as string}
+          </SyntaxHighlighter>
+        )}
       </div>
     )}
   </div>

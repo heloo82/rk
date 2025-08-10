@@ -11,6 +11,7 @@ interface HeaderProps {
 
 // Available programming languages
 const LANGUAGES = [
+  { value: 'text', label: 'Text (MCQ Only)' },
   { value: 'python', label: 'Python' },
   { value: 'javascript', label: 'JavaScript' },
   { value: 'java', label: 'Java' },

@@ -479,19 +479,21 @@ export class ProcessingHelper {
             role: "system" as const, 
             content: "You are a coding challenge interpreter. Analyze the screenshot of the coding problem and extract all relevant information. Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output. Just return the structured JSON without any other text."
           },
-          {
-            role: "user" as const,
-            content: [
-              {
-                type: "text" as const, 
-                text: `Extract the coding problem details from these screenshots. Return in JSON format. Preferred coding language we gonna use for this problem is ${language}.`
-              },
-              ...imageDataList.map(data => ({
-                type: "image_url" as const,
-                image_url: { url: `data:image/png;base64,${data}` }
-              }))
-            ]
-          }
+                        {
+                role: "user" as const,
+                content: [
+                  {
+                    type: "text" as const, 
+                    text: language === "text" 
+                      ? `Extract the MCQ (Multiple Choice Question) details from these screenshots. Return in JSON format with these fields: question, options (array of A, B, C, D), correct_answer, explanation. This is a text-based question that doesn't require code.`
+                      : `Extract the coding problem details from these screenshots. Return in JSON format. Preferred coding language we gonna use for this problem is ${language}.`
+                  },
+                  ...imageDataList.map(data => ({
+                    type: "image_url" as const,
+                    image_url: { url: `data:image/png;base64,${data}` }
+                  }))
+                ]
+              }
         ];
 
         // Send to OpenAI Vision API
@@ -531,7 +533,9 @@ export class ProcessingHelper {
               role: "user",
               parts: [
                 {
-                  text: `You are a coding challenge interpreter. Analyze the screenshots of the coding problem and extract all relevant information. Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output. Just return the structured JSON without any other text. Preferred coding language we gonna use for this problem is ${language}.`
+                  text: language === "text" 
+                    ? `You are a coding challenge interpreter. Analyze the screenshots of the coding problem and extract all relevant information. Return the information in JSON format with these fields: question, options (array of A, B, C, D), correct_answer, explanation. This is a text-based question that doesn't require code.`
+                    : `You are a coding challenge interpreter. Analyze the screenshots of the coding problem and extract all relevant information. Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output. Just return the structured JSON without any other text. Preferred coding language we gonna use for this problem is ${language}.`
                 },
                 ...imageDataList.map(data => ({
                   inlineData: {
@@ -589,7 +593,9 @@ export class ProcessingHelper {
               content: [
                 {
                   type: "text" as const,
-                  text: `Extract the coding problem details from these screenshots. Return in JSON format with these fields: problem_statement, constraints, example_input, example_output. Preferred coding language is ${language}.`
+                  text: language === "text" 
+                    ? `Extract the MCQ (Multiple Choice Question) details from these screenshots. Return in JSON format with these fields: question, options (array of A, B, C, D), correct_answer, explanation. This is a text-based question that doesn't require code.`
+                    : `Extract the coding problem details from these screenshots. Return in JSON format with these fields: problem_statement, constraints, example_input, example_output. Preferred coding language is ${language}.`
                 },
                 ...imageDataList.map(data => ({
                   type: "image" as const,
@@ -734,7 +740,25 @@ export class ProcessingHelper {
       }
 
       // Create prompt for solution generation
-      const promptText = `
+      const promptText = language === "text" 
+        ? `
+Analyze the following MCQ (Multiple Choice Question) and provide the correct answer with explanation:
+
+QUESTION:
+${problemInfo.question || problemInfo.problem_statement}
+
+OPTIONS:
+${problemInfo.options ? problemInfo.options.join(', ') : "A, B, C, D"}
+
+I need the response in the following format:
+1. Correct Answer: The letter of the correct option (A, B, C, or D)
+2. Explanation: A detailed explanation of why this answer is correct
+3. Why Other Options Are Wrong: Brief explanation of why each incorrect option is not the right answer
+4. Key Concepts: List the main concepts or knowledge areas this question tests
+
+This is a text-based question that doesn't require code generation.
+`
+        : `
 Generate a detailed solution for the following coding problem:
 
 PROBLEM STATEMENT:
@@ -1045,7 +1069,13 @@ If you include code examples, use proper markdown code blocks with language spec
             content: [
               {
                 type: "text" as const, 
-                text: `I'm solving this coding problem: "${problemInfo.problem_statement}" in ${language}. I need help with debugging or improving my solution. Here are screenshots of my code, the errors or test cases. Please provide a detailed analysis with:
+                text: language === "text" 
+                  ? `I'm analyzing this MCQ question: "${problemInfo.question || problemInfo.problem_statement}". I need help understanding why my answer might be wrong or getting clarification on the correct answer. Here are screenshots of the question and my reasoning. Please provide a detailed analysis with:
+1. What misconceptions you found in my reasoning
+2. Specific corrections to my understanding
+3. Any additional context that would help clarify the answer
+4. A clear explanation of why the correct answer is right` 
+                  : `I'm solving this coding problem: "${problemInfo.problem_statement}" in ${language}. I need help with debugging or improving my solution. Here are screenshots of my code, the errors or test cases. Please provide a detailed analysis with:
 1. What issues you found in my code
 2. Specific improvements and corrections
 3. Any optimizations that would make the solution better
@@ -1083,7 +1113,31 @@ If you include code examples, use proper markdown code blocks with language spec
         }
         
         try {
-          const debugPrompt = `
+          const debugPrompt = language === "text" 
+          ? `
+You are an MCQ analysis assistant helping understand and clarify multiple choice questions. Analyze these screenshots which include the question and any reasoning or answers provided, and provide detailed clarification help.
+
+I'm analyzing this MCQ question: "${problemInfo.question || problemInfo.problem_statement}". I need help understanding why my answer might be wrong or getting clarification on the correct answer.
+
+YOUR RESPONSE MUST FOLLOW THIS EXACT STRUCTURE WITH THESE SECTION HEADERS:
+### Misconceptions Identified
+- List each misconception in my reasoning as a bullet point with clear explanation
+
+### Correct Understanding
+- List the correct concepts and reasoning as bullet points
+
+### Additional Context
+- List any additional information that would help clarify the answer
+
+### Why the Correct Answer is Right
+Here provide a clear explanation of why the correct answer is the best choice
+
+### Key Concepts
+- Summary bullet points of the most important concepts this question tests
+
+This is a text-based question that doesn't require code examples.
+`
+          : `
 You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.
 
 I'm solving this coding problem: "${problemInfo.problem_statement}" in ${language}. I need help with debugging or improving my solution.

@@ -81,22 +81,66 @@ const SolutionSection = ({
           >
             {copied ? "Copied!" : "Copy"}
           </button>
-          <SyntaxHighlighter
-            showLineNumbers
-            language={currentLanguage == "golang" ? "go" : currentLanguage}
-            style={dracula}
-            customStyle={{
-              maxWidth: "100%",
-              margin: 0,
-              padding: "1rem",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-all",
-              backgroundColor: "rgba(22, 27, 34, 0.5)"
-            }}
-            wrapLongLines={true}
-          >
-            {content as string}
-          </SyntaxHighlighter>
+   {currentLanguage === "text" ? (
+  <div
+    className="bg-[rgba(22,27,34,0.5)] p-4 rounded text-white/90 text-sm leading-relaxed whitespace-pre-wrap"
+    style={{ fontFamily: 'monospace' }}
+  >
+    {(() => {
+      const textContent = content as string;
+
+      // First try to find "Correct Answer: [option]"
+      let match = textContent.match(/Correct Answer:\s*([a-d1-4])/i);
+      if (match) {
+        return match[1].toUpperCase();
+      }
+
+      // Then try to find "[option]->" pattern
+      match = textContent.match(/([a-d1-4])\s*->/i);
+      if (match) {
+        return match[1].toUpperCase();
+      }
+
+      // NEW: Find all options like a,b,c,d or 1,2,3,4 followed by ')', '.' or '->'
+      // This regex finds all matches in textContent like: "a) option text", "1. option", "b -> something"
+      const optionRegex = /([a-d1-4])\s*[\)\.\->]/gi;
+      const options = [];
+      let optMatch;
+      while ((optMatch = optionRegex.exec(textContent)) !== null) {
+        options.push(optMatch[1].toUpperCase());
+      }
+      if (options.length > 0) {
+        // Join all found options with commas, e.g. "A, B, C, D"
+        return options.join(", ");
+      }
+
+      // If no patterns found, return empty string to avoid verbose output
+      return "";
+    })()}
+  </div>
+) : (
+  // your other JSX here
+
+
+
+
+            <SyntaxHighlighter
+              showLineNumbers
+              language={currentLanguage == "golang" ? "go" : currentLanguage}
+              style={dracula}
+              customStyle={{
+                maxWidth: "100%",
+                margin: 0,
+                padding: "1rem",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+                backgroundColor: "rgba(22, 27, 34, 0.5)"
+              }}
+              wrapLongLines={true}
+            >
+              {content as string}
+            </SyntaxHighlighter>
+          )}
         </div>
       )}
     </div>
@@ -300,7 +344,7 @@ const Solutions: React.FC<SolutionsProps> = ({
         setTimeComplexityData(null)
         setSpaceComplexityData(null)
       }),
-      window.electronAPI.onProblemExtracted((data) => {
+      window.electronAPI.onProblemExtracted((data: any) => {
         queryClient.setQueryData(["problem_statement"], data)
       }),
       //if there was an error processing the initial solution
@@ -323,7 +367,7 @@ const Solutions: React.FC<SolutionsProps> = ({
         console.error("Processing error:", error)
       }),
       //when the initial solution is generated, we'll set the solution data to that
-      window.electronAPI.onSolutionSuccess((data) => {
+      window.electronAPI.onSolutionSuccess((data: any) => {
         if (!data) {
           console.warn("Received empty or invalid solution data")
           return
@@ -347,7 +391,7 @@ const Solutions: React.FC<SolutionsProps> = ({
           try {
             const existing = await window.electronAPI.getScreenshots()
             const screenshots =
-              existing.previews?.map((p) => ({
+              existing.previews?.map((p: any) => ({
                 id: p.path,
                 path: p.path,
                 preview: p.preview,
@@ -370,7 +414,7 @@ const Solutions: React.FC<SolutionsProps> = ({
         setDebugProcessing(true)
       }),
       //the first time debugging works, we'll set the view to debug and populate the cache with the data
-      window.electronAPI.onDebugSuccess((data) => {
+      window.electronAPI.onDebugSuccess((data: any) => {
         queryClient.setQueryData(["new_solution"], data)
         setDebugProcessing(false)
       }),

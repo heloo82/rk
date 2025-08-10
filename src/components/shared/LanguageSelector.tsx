@@ -40,6 +40,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
           className="bg-black/80 text-white/90 rounded px-2 py-1 text-sm outline-none border border-white/10 focus:border-white/20"
           style={{ WebkitAppearance: 'menulist' }}
         >
+          <option value="text" className="bg-black text-white">Text (MCQ Only)</option>
           <option value="python" className="bg-black text-white">Python</option>
           <option value="javascript" className="bg-black text-white">JavaScript</option>
           <option value="java" className="bg-black text-white">Java</option>

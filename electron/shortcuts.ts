@@ -167,18 +167,18 @@ export class ShortcutsHelper {
     })
 
     // MCQ capture and answer shortcut
-    globalShortcut.register("Z", async () => {
-      console.log("Z key pressed. Capturing MCQ and analyzing...")
-      try {
-        if (this.mcqHelper) {
-          await this.mcqHelper.captureMCQAndShowAnswer()
-        } else {
-          console.error("MCQ Helper not initialized")
-        }
-      } catch (error) {
-        console.error("Error in MCQ capture:", error)
-      }
-    })
+  globalShortcut.register("CommandOrControl+.", async () => { 
+  console.log("CommandOrControl+. pressed. Capturing MCQ and analyzing...");
+  try {
+    if (this.mcqHelper) {
+      await this.mcqHelper.captureMCQAndShowAnswer();
+    } else {
+      console.error("MCQ Helper not initialized");
+    }
+  } catch (error) {
+    console.error("Error in MCQ capture:", error);
+  }
+});
     
     // Unregister shortcuts when quitting
     app.on("will-quit", () => {
